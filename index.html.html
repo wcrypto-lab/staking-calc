@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가상자산 스테이킹 세후 복리 계산기</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151c2c;
+            --border-color: #2a354d;
+            --accent-color: #6366f1;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --green: #10b981;
+            --red: #ef4444;
+        }
+
+        * { box-sizing: border-box; font-family: 'Pretendard', -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-primary); margin: 0; padding: 40px 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { font-size: 28px; font-weight: 800; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
+        .header p { color: var(--text-secondary); font-size: 15px; }
+
+        .dashboard { display: grid; grid-template-columns: 360px 1fr; gap: 24px; }
+        @media (max-width: 900px) { .dashboard { grid-template-columns: 1fr; } }
+
+        .panel { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 20px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+
+        .form-group { margin-bottom: 18px; }
+        label { font-size: 13px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px; }
+        input, select { width: 100%; padding: 12px 16px; background: #0f1420; border: 1px solid var(--border-color); border-radius: 10px; font-size: 15px; color: var(--text-primary); transition: 0.2s; }
+        input:focus, select:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); }
+
+        .tax-badge { display: inline-block; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 2px 8px; border-radius: 6px; font-size: 11px; margin-left: 6px; }
+
+        button { width: 100%; background: var(--accent-gradient); color: white; border: none; padding: 16px; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: 0.3s; margin-top: 10px; box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3); }
+        button:hover { transform: translateY(-2px); box-shadow: 0 15px 25px rgba(99, 102, 241, 0.4); }
+
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .res-card { background: #0f1420; border: 1px solid var(--border-color); padding: 18px; border-radius: 14px; }
+        .res-card h4 { font-size: 12px; color: var(--text-secondary); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .res-card .val { font-size: 20px; font-weight: 800; }
+        .res-card .sub-val { font-size: 12px; margin-top: 4px; }
+
+        .chart-section { height: 280px; margin-top: 20px; position: relative; }
+        
+        .table-container { margin-top: 30px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: right; }
+        th, td { padding: 12px; border-bottom: 1px solid var(--border-color); }
+        th { background: #0f1420; color: var(--text-secondary); font-weight: 600; text-align: right; }
+        th:first-child, td:first-child { text-align: center; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>⚡ 국내 주요 코인 스테이킹 세후 복리 계산기</h1>
+        <p>업비트·빗썸 지원 자산 기반 | 2027년 가상자산 과세(22%) 자동 차감 모델</p>
+    </div>
+
+    <div class="dashboard">
+        <!-- 입력 폼 -->
+        <div class="panel">
+            <div class="form-group">
+                <label for="coin">스테이킹 자산 선택</label>
+                <select id="coin" onchange="applyCoinDefaults()">
+                    <option value="ETH">이더리움 (ETH)</option>
+                    <option value="SOL">솔라나 (SOL)</option>
+                    <option value="ATOM">코스모스 (ATOM)</option>
+                    <option value="ADA">에이다 (ADA)</option>
+                    <option value="POL">폴리곤 (POL/MATIC)</option>
+                    <option value="AVAX">아발란체 (AVAX)</option>
+                    <option value="TRX">트론 (TRX)</option>
+                    <option value="KAS">카스파 (KAS)</option>
+                    <option value="CUSTOM">직접 입력 (사용자 지정)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="amount">보유 수량</label>
+                <input type="number" id="amount" value="10" step="any">
+            </div>
+
+            <div class="form-group">
+                <label for="price">현재 개당 단가 (KRW)</label>
+                <input type="number" id="price" value="3500000" step="100">
+            </div>
+
+            <div class="form-group">
+                <label for="apy">초기 스테이킹 연이율 (APY %)</label>
+                <input type="number" id="apy" value="3.5" step="0.1">
+            </div>
+
+            <div class="form-group">
+                <label for="apyDecay">연간 APY 감쇄율 (% / 년)</label>
+                <input type="number" id="apyDecay" value="5" step="0.5" placeholder="예: 매년 5%씩 이율 하락">
+            </div>
+
+            <div class="form-group">
+                <label for="priceGrowth">예상 연간 단가 상승률 (%)</label>
+                <input type="number" id="priceGrowth" value="10" step="1">
+            </div>
+
+            <div class="form-group">
+                <label for="years">투자기간 (년)</label>
+                <input type="number" id="years" value="5" min="1" max="30">
+            </div>
+
+            <div class="form-group">
+                <label for="taxRate">가상자산 세율 <span class="tax-badge">2027년 적용</span></label>
+                <input type="number" id="taxRate" value="22" readonly style="opacity: 0.7; cursor: not-allowed;">
+            </div>
+
+            <button onclick="calculate()">시뮬레이션 실행</button>
+        </div>
+
+        <!-- 결과 리포트 -->
+        <div class="panel">
+            <div class="cards-grid">
+                <div class="res-card">
+                    <h4>세후 최종 평가액</h4>
+                    <div class="val" id="finalAfterTaxVal" style="color: var(--accent-color);">0 원</div>
+                    <div class="sub-val" id="finalCoinQty" style="color: var(--text-secondary);">0 ETH</div>
+                </div>
+                <div class="res-card">
+                    <h4>세후 순 수익금</h4>
+                    <div class="val" id="netProfit" style="color: var(--green);">+0 원</div>
+                    <div class="sub-val" id="taxDeducted" style="color: var(--red);">예상 세금: -0 원</div>
+                </div>
+                <div class="res-card">
+                    <h4>세후 실질 수익률</h4>
+                    <div class="val" id="roiPercent" style="color: var(--green);">0%</div>
+                    <div class="sub-val" id="stakedCoinsOnly">이자 수량: +0 ETH</div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <canvas id="growthChart"></canvas>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>연차</th>
+                            <th>적용 APY</th>
+                            <th>누적 수량</th>
+                            <th>예상 단가</th>
+                            <th>세전 평가액</th>
+                            <th>세후 평가액</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const coinData = {
+        ETH: { price: 3500000, apy: 3.5 },
+        SOL: { price: 220000, apy: 6.8 },
+        ATOM: { price: 8500, apy: 14.0 },
+        ADA: { price: 500, apy: 3.0 },
+        POL: { price: 650, apy: 4.5 },
+        AVAX: { price: 35000, apy: 7.5 },
+        TRX: { price: 200, apy: 4.0 },
+        KAS: { price: 180, apy: 8.0 }
+    };
+
+    let chart;
+
+    function applyCoinDefaults() {
+        const symbol = document.getElementById('coin').value;
+        if (symbol !== 'CUSTOM' && coinData[symbol]) {
+            document.getElementById('price').value = coinData[symbol].price;
+            document.getElementById('apy').value = coinData[symbol].apy;
+        }
+        calculate();
+    }
+
+    function calculate() {
+        const symbol = document.getElementById('coin').value;
+        const coinSymbol = symbol === 'CUSTOM' ? 'COIN' : symbol;
+        const initAmount = parseFloat(document.getElementById('amount').value) || 0;
+        let currentPrice = parseFloat(document.getElementById('price').value) || 0;
+        let currentApy = (parseFloat(document.getElementById('apy').value) || 0) / 100;
+        const apyDecay = (parseFloat(document.getElementById('apyDecay').value) || 0) / 100;
+        const priceGrowth = (parseFloat(document.getElementById('priceGrowth').value) || 0) / 100;
+        const years = parseInt(document.getElementById('years').value) || 1;
+        const taxRate = 0.22; // 22% 세금
+
+        const initialPrincipalKRW = initAmount * currentPrice;
+
+        let labels = ['현재'];
+        let preTaxValues = [initialPrincipalKRW];
+        let postTaxValues = [initialPrincipalKRW];
+        
+        let currentCoins = initAmount;
+        let tableHtml = `<tr>
+            <td>현재</td>
+            <td>-</td>
+            <td>${currentCoins.toFixed(2)} ${coinSymbol}</td>
+            <td>${Math.round(currentPrice).toLocaleString()}원</td>
+            <td>${Math.round(initialPrincipalKRW).toLocaleString()}원</td>
+            <td>${Math.round(initialPrincipalKRW).toLocaleString()}원</td>
+        </tr>`;
+
+        for (let y = 1; y <= years; y++) {
+            // 해당 연도 이율 적용 후 수량 증가
+            currentCoins = currentCoins * (1 + currentApy);
+            currentPrice = currentPrice * (1 + priceGrowth);
+
+            const preTaxTotal = currentCoins * currentPrice;
+            
+            // 총 이익 = (현재 총 가치) - (초기 매수 원금)
+            const totalProfit = preTaxTotal - initialPrincipalKRW;
+            const tax = totalProfit > 0 ? totalProfit * taxRate : 0;
+            const postTaxTotal = preTaxTotal - tax;
+
+            labels.push(`${y}년 후`);
+            preTaxValues.push(preTaxTotal);
+            postTaxValues.push(postTaxTotal);
+
+            tableHtml += `<tr>
+                <td>${y}년 후</td>
+                <td style="color: var(--text-secondary);">${(currentApy * 100).toFixed(2)}%</td>
+                <td>${currentCoins.toFixed(2)} ${coinSymbol}</td>
+                <td>${Math.round(currentPrice).toLocaleString()}원</td>
+                <td>${Math.round(preTaxTotal).toLocaleString()}원</td>
+                <td style="color:#6366f1; font-weight:bold;">${Math.round(postTaxTotal).toLocaleString()}원</td>
+            </tr>`;
+
+            // 다음 연도를 위해 APY 감쇄 적용 (예: 매년 설정된 % 비율만큼 하락)
+            currentApy = currentApy * (1 - apyDecay);
+        }
+
+        const finalPreTax = preTaxValues[years];
+        const finalPostTax = postTaxValues[years];
+        const totalTax = (finalPreTax - initialPrincipalKRW) > 0 ? (finalPreTax - initialPrincipalKRW) * taxRate : 0;
+        const netProfitVal = finalPostTax - initialPrincipalKRW;
+        const roi = (netProfitVal / initialPrincipalKRW) * 100;
+
+        // UI 업데이트
+        document.getElementById('finalAfterTaxVal').innerText = `${Math.round(finalPostTax).toLocaleString()} 원`;
+        document.getElementById('finalCoinQty').innerText = `총 수량: ${currentCoins.toFixed(2)} ${coinSymbol}`;
+        document.getElementById('netProfit').innerText = `${netProfitVal >= 0 ? '+' : ''}${Math.round(netProfitVal).toLocaleString()} 원`;
+        document.getElementById('taxDeducted').innerText = `예상 세금(22%): -${Math.round(totalTax).toLocaleString()} 원`;
+        document.getElementById('roiPercent').innerText = `${roi.toFixed(1)}%`;
+        document.getElementById('stakedCoinsOnly').innerText = `이자 수량: +${(currentCoins - initAmount).toFixed(2)} ${coinSymbol}`;
+        document.getElementById('tableBody').innerHTML = tableHtml;
+
+        // 차트 업데이트
+        renderChart(labels, preTaxValues, postTaxValues);
+    }
+
+    function renderChart(labels, preTax, postTax) {
+        if (chart) chart.destroy();
+        const ctx = document.getElementById('growthChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '세후 평가액 (실수령)',
+                        data: postTax,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 3
+                    },
+                    {
+                        label: '세전 평가액',
+                        data: preTax,
+                        borderColor: '#475569',
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.3,
+                        borderWidth: 1.5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.raw).toLocaleString()}원`
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8', callback: (v) => (v / 10000).toLocaleString() + '만' } }
+                }
+            }
+        });
+    }
+
+    // 초기 실행
+    calculate();
+</script>
+
+</body>
+</html>
